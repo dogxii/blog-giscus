@@ -3,13 +3,30 @@ name: Discussion Notification
 on:
   discussion_comment:
     types: [created]
-  discussion:
-    types: [created]
 
 jobs:
   send-notification:
     runs-on: ubuntu-latest
     steps:
+      - name: Build message
+        id: build
+        shell: bash
+        env:
+          COMMENT_URL: ${{ github.event.comment.html_url }}
+          DISCUSSION_TITLE: ${{ github.event.comment.discussion.title }}
+          ACTOR: ${{ github.event.comment.user.login }}
+          BODY_RAW: ${{ github.event.comment.body }}
+          BLOG_BASE_URL: https://blog.dogxi.me
+        run: |
+          BLOG_LINK="${BLOG_BASE_URL}/${DISCUSSION_TITLE}"
+          SUBJECT="Blog 收到新评论"
+          MSG="Blog 收到新评论：「${BODY_RAW}」，来自 ${ACTOR}；GitHub 链接：${COMMENT_URL}；博客链接：${BLOG_LINK}"
+
+          echo "subject=${SUBJECT}" >> $GITHUB_OUTPUT
+          echo "mail_body=${MSG}" >> $GITHUB_OUTPUT
+          echo "ntfy_title=Blog 收到新评论" >> $GITHUB_OUTPUT
+          echo "ntfy_details=${MSG}" >> $GITHUB_OUTPUT
+
       - name: Send email
         uses: dawidd6/action-send-mail@v3
         with:
@@ -17,28 +34,22 @@ jobs:
           server_port: ${{secrets.MAIL_PORT}}
           username: ${{secrets.MAIL_USERNAME}}
           password: ${{secrets.MAIL_PASSWORD}}
-          subject: New comment on your blog
-          body: |
-            There is a new comment in your blog discussions!
-
-            Comment by: ${{ github.event.comment.user.login || github.event.discussion.user.login }}
-            Content: ${{ github.event.comment.body || github.event.discussion.body }}
-
-            Link: ${{ github.event.comment.html_url || github.event.discussion.html_url }}
+          subject: ${{ steps.build.outputs.subject }}
+          body: ${{ steps.build.outputs.mail_body }}
           to: ${{secrets.MAIL_TO}}
           from: Blog Notification <${{secrets.MAIL_FROM}}>
+          # 如端口为 465 建议：
+          # secure: true
+          # 如端口为 587 可加：
+          # tls: true
 
       - name: ntfy-notifications
         uses: niniyas/ntfy-action@master
         with:
-          title: ${{ github.event.comment.user.login || github.event.discussion.user.login }} 给您的博客评论啦
+          title: ${{ steps.build.outputs.ntfy_title }}
           url: ${{ secrets.NTFY_URL }}
           topic: ${{ secrets.NTFY_TOPIC }}
           priority: 5
-          headers: '{"authorization": "Bearer ${{ secrets.NTFY_TOKEN }}"}'
           tags: tada
-          details: |
-            Comment by: ${{ github.event.comment.user.login || github.event.discussion.user.login }}
-            Content: ${{ github.event.comment.body || github.event.discussion.body }}
-
-            Link: ${{ github.event.comment.html_url || github.event.discussion.html_url }}
+          headers: '{"Authorization": "Bearer ${{ secrets.NTFY_TOKEN }}"}'
+          details: ${{ steps.build.outputs.ntfy_details }}
