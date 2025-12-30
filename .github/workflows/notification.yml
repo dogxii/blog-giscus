@@ -27,6 +27,9 @@ jobs:
           echo "ntfy_title=Blog 收到新评论" >> $GITHUB_OUTPUT
           echo "ntfy_details=${MSG}" >> $GITHUB_OUTPUT
 
+      - name: Dump github.event
+        run: echo '${{ toJson(github.event) }}'
+
       - name: Send email
         uses: dawidd6/action-send-mail@v3
         with:
