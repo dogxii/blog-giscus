@@ -13,22 +13,21 @@ jobs:
         shell: bash
         env:
           COMMENT_URL: ${{ github.event.comment.html_url }}
-          DISCUSSION_TITLE: ${{ github.event.comment.discussion.title }}
+          DISCUSSION_TITLE: ${{ github.event.discussion.title }}
           ACTOR: ${{ github.event.comment.user.login }}
           BODY_RAW: ${{ github.event.comment.body }}
           BLOG_BASE_URL: https://blog.dogxi.me
         run: |
           BLOG_LINK="${BLOG_BASE_URL}/${DISCUSSION_TITLE}"
-          SUBJECT="Blog 收到新评论"
-          MSG="Blog 收到新评论：「${BODY_RAW}」，来自 ${ACTOR}；GitHub 链接：${COMMENT_URL}；博客链接：${BLOG_LINK}"
+          SUBJECT="Blog New Comment"
+          MSG="${ACTOR}："${BODY_RAW}"
+          博客链接：${BLOG_LINK}
+          GitHub 链接：${COMMENT_URL}"
 
           echo "subject=${SUBJECT}" >> $GITHUB_OUTPUT
           echo "mail_body=${MSG}" >> $GITHUB_OUTPUT
-          echo "ntfy_title=Blog 收到新评论" >> $GITHUB_OUTPUT
+          echo "ntfy_title=Blog New Comment" >> $GITHUB_OUTPUT
           echo "ntfy_details=${MSG}" >> $GITHUB_OUTPUT
-
-      - name: Dump github.event
-        run: echo '${{ toJson(github.event) }}'
 
       - name: Send email
         uses: dawidd6/action-send-mail@v3
