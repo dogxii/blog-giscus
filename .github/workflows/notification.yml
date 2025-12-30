@@ -1,0 +1,86 @@
+# .github/workflows/notification.yml
+
+name: Discussion Notification
+
+on:
+  discussion_comment:
+    types: [created]
+
+permissions:
+  discussions: read
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # 评论且不是机器人且正文非空
+    if: >
+      github.event_name == 'discussion_comment' &&
+      github.event.action == 'created' &&
+      github.event.comment.user.type != 'Bot' &&
+      github.event.comment.body != ''
+
+    env:
+      ACTOR: ${{ github.event.comment.user.login }}
+      BODY_RAW: ${{ github.event.comment.body }}
+      LINK: ${{ github.event.comment.html_url }}
+      TITLE_RAW: ${{ github.event.comment.discussion.title }}
+
+    steps:
+      - name: Build minimal message
+        id: build
+        shell: bash
+        run: |
+          BODY_ONELINE="$(echo "${BODY_RAW}" | tr -d '\r' | tr '\n' ' ')"
+          MAX=200
+          if [ ${#BODY_ONELINE} -gt $MAX ]; then
+            BODY_SHORT="${BODY_ONELINE:0:$MAX}…"
+          else
+            BODY_SHORT="${BODY_ONELINE}"
+          fi
+
+          TITLE_ONELINE="$(echo "${TITLE_RAW}" | tr -d '\r' | tr '\n' ' ')"
+          if [ ${#TITLE_ONELINE} -gt 100 ]; then
+            TITLE_SHORT="${TITLE_ONELINE:0:100}…"
+          else
+            TITLE_SHORT="${TITLE_ONELINE}"
+          fi
+
+          MAIL_SUBJECT="Blog 收到新评论"
+          MSG="Blog 收到新评论：「${BODY_SHORT}」，来自 ${ACTOR}，讨论「${TITLE_SHORT}」，链接：${LINK}"
+
+          echo "mail_subject=${MAIL_SUBJECT}" >> $GITHUB_OUTPUT
+          echo "mail_body=${MSG}" >> $GITHUB_OUTPUT
+          echo "ntfy_title=Blog 有新评论" >> $GITHUB_OUTPUT
+          echo "ntfy_details=${MSG}" >> $GITHUB_OUTPUT
+
+      - name: Send email
+        continue-on-error: true
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.MAIL_SERVER }}
+          server_port: ${{ secrets.MAIL_PORT }}
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: ${{ steps.build.outputs.mail_subject }}
+          body: ${{ steps.build.outputs.mail_body }}
+          to: ${{ secrets.MAIL_TO }}
+          from: 博客通知 <${{ secrets.MAIL_FROM }}>
+          secure: true
+
+      - name: Send ntfy
+        continue-on-error: true
+        uses: niniyas/ntfy-action@master
+        with:
+          title: ${{ steps.build.outputs.ntfy_title }}
+          url: ${{ secrets.NTFY_URL }}
+          topic: ${{ secrets.NTFY_TOPIC }}
+          priority: 5
+          tags: tada
+          headers-json: |
+            {
+              "Authorization": "Bearer ${NTFY_TOKEN}"
+            }
+          details: ${{ steps.build.outputs.ntfy_details }}
+        env:
+          NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
